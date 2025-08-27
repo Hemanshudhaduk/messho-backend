@@ -10,7 +10,7 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: process.env.FRONTEND_URL || 'https://meesoz.vercel.app/' || "*",
     credentials: true
 }));
 app.use(express.json());
@@ -325,9 +325,9 @@ app.use('*', (req, res) => {
 });
 
 // Start server
-app.listen(PORT, () => {
-    console.log(`Payment server running on port ${PORT}`);
-    console.log(`Health check: http://localhost:${PORT}/health`);
-});
+// app.listen(PORT, () => {
+//     console.log(`Payment server running on port ${PORT}`);
+//     console.log(`Health check: http://localhost:${PORT}/health`);
+// });
 
 module.exports = app;
