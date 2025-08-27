@@ -8,7 +8,7 @@ const app = express();
 
 // Middleware
 app.use(cors({
-  origin: process.env.FRONTEND_URL || '*',
+  origin: process.env.FRONTEND_URL || "https://meesoz.vercel.app" || '*',
   credentials: true
 }));
 app.use(express.json());
