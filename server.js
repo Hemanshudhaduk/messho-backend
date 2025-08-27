@@ -9,10 +9,14 @@ const app = express();
 const PORT = process.env.PORT || 5001;
 
 // Middleware
-app.use(cors({
-    origin: process.env.FRONTEND_URL || 'https://meesoz.vercel.app/',
-    credentials: true
-}));
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL || "https://meesoz.vercel.app", // ✅ no trailing slash
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
+  })
+);
 app.use(express.json());
 app.use(express.raw({ type: 'application/json' }));
 
