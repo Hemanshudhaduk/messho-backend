@@ -6,15 +6,30 @@ const Razorpay = require('razorpay');
 require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 5001;
+// const PORT = process.env.PORT || 5001;
+
+const allowedOrigins = [
+  "http://localhost:8080",  // your local dev frontend
+  "http://localhost:3000",  // if using React dev server
+  "http://localhost:5173",  // if using Vite
+  "https://meesoz.vercel.app" // your deployed frontend
+];
 
 // Middleware
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || "https://meesoz.vercel.app", // ✅ no trailing slash
+    origin: function (origin, callback) {
+      // allow requests with no origin (like mobile apps, curl, postman)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      } else {
+        return callback(new Error("CORS not allowed from this origin: " + origin), false);
+      }
+    },
+    credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: true,
   })
 );
 app.use(express.json());
