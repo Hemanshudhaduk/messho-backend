@@ -1,4 +1,4 @@
-// server.js - Fixed LG-Pay Integration with Minimum Amount Validation
+// server.js - LG-Pay Integration WITHOUT Minimum Order Restriction
 const express = require('express');
 const cors = require('cors');
 const crypto = require('crypto');
@@ -6,9 +6,6 @@ const axios = require('axios');
 require('dotenv').config();
 
 const app = express();
-
-// Configuration
-const LGPAY_MIN_AMOUNT = 200; // Minimum amount in rupees as per LG-Pay requirement
 
 // Middleware
 app.use(cors({
@@ -57,42 +54,7 @@ function generateSignature(data, secretKey) {
 
 // Health check
 app.get('/health', (req, res) => {
-    res.json({ status: 'OK', message: 'LG-Pay server is running' });
-});
-
-// Debug endpoint to track problematic orders
-app.post('/api/debug-order', (req, res) => {
-    try {
-        const { amount, cartItems, discountInfo } = req.body;
-        
-        console.log('\n🔍 DEBUG ORDER REQUEST');
-        console.log('Raw amount:', amount);
-        console.log('Cart items:', cartItems);
-        console.log('Discount info:', discountInfo);
-        
-        const amountInRupees = parseFloat(amount);
-        const amountInPaisa = Math.round(amountInRupees * 100);
-        
-        res.json({
-            debug: {
-                originalAmount: amount,
-                parsedAmount: amountInRupees,
-                amountInPaisa: amountInPaisa,
-                reconvertedAmount: amountInPaisa / 100,
-                isValidAmount: amountInRupees >= LGPAY_MIN_AMOUNT,
-                minimumRequired: LGPAY_MIN_AMOUNT,
-                difference: LGPAY_MIN_AMOUNT - amountInRupees,
-                cartItems: cartItems,
-                discountInfo: discountInfo
-            }
-        });
-        
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    }
+    res.json({ status: 'OK', message: 'LG-Pay server is running - No minimum order restrictions' });
 });
 
 // Test signature endpoint
@@ -102,7 +64,7 @@ app.get('/api/test-signature', (req, res) => {
             app_id: process.env.LGPAY_APP_ID,
             trade_type: process.env.LGPAY_TRADE_TYPE,
             order_sn: 'test123',
-            money: '20000', // 200 rupees in paisa
+            money: '100', // 1 rupee in paisa for testing
             notify_url: process.env.LGPAY_NOTIFY_URL,
             ip: '127.0.0.1',
             remark: 'test'
@@ -119,7 +81,7 @@ app.get('/api/test-signature', (req, res) => {
                 secret_key: process.env.LGPAY_SECRET_KEY,
                 trade_type: process.env.LGPAY_TRADE_TYPE,
                 notify_url: process.env.LGPAY_NOTIFY_URL,
-                minimum_amount: LGPAY_MIN_AMOUNT
+                no_minimum_restriction: true
             }
         });
         
@@ -131,40 +93,29 @@ app.get('/api/test-signature', (req, res) => {
     }
 });
 
-// Create order endpoint - FIXED with minimum amount validation
+// Create order endpoint - REMOVED ALL MINIMUM RESTRICTIONS
 app.post('/api/create-order', async (req, res) => {
     try {
         const { amount } = req.body;
         
-        console.log('\n🎯 NEW ORDER REQUEST');
+        console.log('\n🎯 NEW ORDER REQUEST (No Minimum Restrictions)');
         console.log('Amount (rupees):', amount);
         
-        // Validate amount is provided
+        // Basic validation - only check for valid positive amount
         if (!amount || isNaN(amount) || amount <= 0) {
             return res.status(400).json({
                 success: false,
-                message: 'Valid amount is required'
+                message: 'Amount must be a positive number',
+                debug: {
+                    reason: 'INVALID_AMOUNT',
+                    provided: amount,
+                    required: 'Positive number greater than 0'
+                }
             });
         }
         
         const amountInRupees = parseFloat(amount);
-        
-        // CRITICAL FIX: Check minimum amount requirement
-        if (amountInRupees < LGPAY_MIN_AMOUNT) {
-            console.log(`❌ Amount ${amountInRupees} is below minimum ${LGPAY_MIN_AMOUNT}`);
-            return res.status(400).json({
-                success: false,
-                message: `Minimum order amount is ₹${LGPAY_MIN_AMOUNT}. Your order amount is ₹${amountInRupees}.`,
-                minimumAmount: LGPAY_MIN_AMOUNT,
-                currentAmount: amountInRupees,
-                debug: {
-                    reason: 'BELOW_MINIMUM_AMOUNT',
-                    required: `₹${LGPAY_MIN_AMOUNT}`,
-                    provided: `₹${amountInRupees}`,
-                    difference: `₹${LGPAY_MIN_AMOUNT - amountInRupees}`
-                }
-            });
-        }
+        console.log('✅ Amount validation passed:', amountInRupees, 'rupees');
         
         // Check environment variables
         const { LGPAY_APP_ID, LGPAY_SECRET_KEY, LGPAY_TRADE_TYPE, LGPAY_NOTIFY_URL } = process.env;
@@ -174,7 +125,7 @@ app.post('/api/create-order', async (req, res) => {
         console.log('- TRADE_TYPE:', LGPAY_TRADE_TYPE);
         console.log('- SECRET_KEY:', LGPAY_SECRET_KEY ? 'SET' : 'MISSING');
         console.log('- NOTIFY_URL:', LGPAY_NOTIFY_URL);
-        console.log('- MIN_AMOUNT:', LGPAY_MIN_AMOUNT);
+        console.log('- MINIMUM_RESTRICTION: DISABLED');
         
         if (!LGPAY_APP_ID || !LGPAY_SECRET_KEY || !LGPAY_TRADE_TYPE) {
             return res.status(500).json({
@@ -183,9 +134,9 @@ app.post('/api/create-order', async (req, res) => {
             });
         }
         
-        // Convert amount to paisa (only after validation)
+        // Convert amount to paisa (no minimum check)
         const amountInPaisa = Math.round(amountInRupees * 100);
-        console.log(`✅ Amount validated: ₹${amountInRupees} = ${amountInPaisa} paisa`);
+        console.log('Amount conversion: ₹', amountInRupees, '=', amountInPaisa, 'paisa');
         
         // Build order data
         const orderData = {
@@ -205,6 +156,7 @@ app.post('/api/create-order', async (req, res) => {
         orderData.sign = signature;
         
         console.log('Final order data:', orderData);
+        console.log('✅ Proceeding to LG-Pay (no restrictions applied)');
         
         // Make request to LG-Pay
         const response = await axios.post('https://www.lg-pay.com/api/order/create', 
@@ -221,11 +173,25 @@ app.post('/api/create-order', async (req, res) => {
         
         const lgPayResponse = response.data;
         
-        // Enhanced error handling
+        // Handle LG-Pay specific errors
         if (lgPayResponse.status === 0) {
             console.log('❌ LG-Pay returned error status 0');
             
-            // Handle specific error messages
+            // Check if this is a LG-Pay gateway minimum amount error
+            if (lgPayResponse.msg && lgPayResponse.msg.includes('minimum amount')) {
+                console.log('⚠️  LG-Pay gateway itself has minimum amount restriction');
+                return res.json({
+                    success: false,
+                    message: `LG-Pay gateway requirement: ${lgPayResponse.msg}`,
+                    debug: {
+                        errorType: 'LGPAY_GATEWAY_MINIMUM',
+                        lgPayMessage: lgPayResponse.msg,
+                        sentAmount: `₹${amountInRupees} (${amountInPaisa} paisa)`,
+                        note: 'This is a restriction from the LG-Pay payment gateway itself, not our application'
+                    }
+                });
+            }
+            
             if (lgPayResponse.msg === 'Sign Error') {
                 return res.json({
                     success: false,
@@ -234,30 +200,12 @@ app.post('/api/create-order', async (req, res) => {
                         errorType: 'SIGNATURE_ERROR',
                         orderData: orderData,
                         signature: signature,
-                        lgPayResponse: lgPayResponse,
-                        troubleshooting: [
-                            'Verify LGPAY_SECRET_KEY is correct',
-                            'Check if LG-Pay account is active',
-                            'Contact LG-Pay support for signature format'
-                        ]
+                        lgPayResponse: lgPayResponse
                     }
                 });
             }
             
-            if (lgPayResponse.msg && lgPayResponse.msg.includes('minimum amount')) {
-                return res.json({
-                    success: false,
-                    message: `LG-Pay minimum amount requirement: ${lgPayResponse.msg}`,
-                    debug: {
-                        errorType: 'MINIMUM_AMOUNT_ERROR',
-                        lgPayMessage: lgPayResponse.msg,
-                        sentAmount: `₹${amountInRupees} (${amountInPaisa} paisa)`,
-                        requiredMinimum: '₹200.00'
-                    }
-                });
-            }
-            
-            // Generic error
+            // Generic LG-Pay error
             return res.json({
                 success: false,
                 message: lgPayResponse.msg || 'Payment gateway error',
@@ -286,9 +234,9 @@ app.post('/api/create-order', async (req, res) => {
                     payment_url: paymentUrl
                 },
                 debug: {
-                    amountValidated: `₹${amountInRupees}`,
-                    amountSent: `${amountInPaisa} paisa`,
-                    minimumRequired: `₹${LGPAY_MIN_AMOUNT}`
+                    amountSent: `₹${amountInRupees}`,
+                    amountInPaisa: amountInPaisa,
+                    restrictionsApplied: 'NONE - All amounts allowed'
                 }
             });
         } else {
@@ -318,6 +266,42 @@ app.post('/api/create-order', async (req, res) => {
                 status: error.response?.status,
                 statusText: error.response?.statusText
             }
+        });
+    }
+});
+
+// Debug endpoint to test any amount
+app.post('/api/debug-order', (req, res) => {
+    try {
+        const { amount, cartItems, discountInfo } = req.body;
+        
+        console.log('\n🔍 DEBUG ORDER REQUEST (No Restrictions)');
+        console.log('Raw amount:', amount);
+        console.log('Cart items:', cartItems);
+        console.log('Discount info:', discountInfo);
+        
+        const amountInRupees = parseFloat(amount);
+        const amountInPaisa = Math.round(amountInRupees * 100);
+        
+        res.json({
+            debug: {
+                originalAmount: amount,
+                parsedAmount: amountInRupees,
+                amountInPaisa: amountInPaisa,
+                reconvertedAmount: amountInPaisa / 100,
+                isValidAmount: amountInRupees > 0,
+                minimumRequired: 'NONE - All positive amounts allowed',
+                serverRestrictions: 'DISABLED',
+                cartItems: cartItems,
+                discountInfo: discountInfo,
+                note: 'Server will accept any positive amount'
+            }
+        });
+        
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
         });
     }
 });
